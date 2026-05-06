@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Permainan Sebutan Pahlawan Tanah Melayu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+        
+        body {
+            font-family: 'Fredoka', sans-serif;
+            touch-action: manipulation;
+        }
+
+        /* Latar Belakang Bandar Kartun */
+        .game-world {
+            /* Langit biru di atas, jalan raya kelabu di bawah */
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 60%, #6B7280 60%, #374151 100%);
+            position: relative;
+            overflow: hidden;
+            border-radius: 1rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+        }
+
+        /* Jalan Raya - Garisan Putih putus-putus */
+        .road-line {
+            position: absolute;
+            bottom: 20%;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            background: repeating-linear-gradient(90deg, transparent, transparent 20px, white 20px, white 60px);
+            opacity: 0.8;
+        }
+
+        /* Matahari & Awan */
+        .sun {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            background: #FFD700;
+            border-radius: 50%;
+            box-shadow: 0 0 30px #FFD700;
+        }
+
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.9;
+        }
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Bangunan Kartun */
+        .building {
+            position: absolute;
+            bottom: 40%;
+            border: 3px solid #1F2937;
+            border-bottom: none;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: flex-start;
+            padding-top: 15px;
+            gap: 8px;
+            box-shadow: 5px 0px 0px rgba(0,0,0,0.1);
+        }
+        .window {
+            width: 18px;
+            height: 25px;
+            background-color: #FDE047; /* Tingkap menyala */
+            border: 2px solid #1F2937;
+            border-radius: 2px;
+        }
+
+        /* Animasi Kereta Kecil */
+        .carriage-container {
+            position: absolute;
+            bottom: 22%; /* Berada di atas jalan raya */
+            left: -150px;
+            width: 100px;
+            height: 60px;
+            z-index: 10;
+            transition: transform 1s ease-in-out;
+        }
+
+        .carriage {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .carriage svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Animasi Roda */
+        .wheel {
+            transform-origin: center;
+            animation: spin 1s linear infinite;
+        }
+        .carriage-container.stopped .wheel {
+            animation: none;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Animasi Halangan (Kon) */
+        .obstacle {
+            position: absolute;
+            bottom: 22%;
+            left: 60%;
+            width: 50px;
+            height: 50px;
+            z-index: 5;
+            transition: opacity 0.5s;
+        }
+
+        /* Status Kereta */
+        .pos-start { transform: translateX(0); }
+        .pos-middle { transform: translateX(calc(50vw - 50px)); } /* Bergerak ke tengah */
+        .pos-end { transform: translateX(120vw); }
+
+        /* Kesan Langgar (Shake) */
+        @keyframes crash-shake {
+            0% { transform: translateX(calc(50vw - 50px)) rotate(0deg); }
+            25% { transform: translateX(calc(50vw - 50px - 10px)) rotate(-5deg); }
+            50% { transform: translateX(calc(50vw - 50px + 10px)) rotate(5deg); }
+            75% { transform: translateX(calc(50vw - 50px - 10px)) rotate(-5deg); }
+            100% { transform: translateX(calc(50vw - 50px)) rotate(0deg); }
+        }
+        .crash-anim {
+            animation: crash-shake 0.4s ease-in-out;
+        }
+
+        /* Pulse Mic Button */
+        @keyframes pulse-mic {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .listening {
+            animation: pulse-mic 1.5s infinite;
+            background-color: #EF4444 !important; /* Merah bila mendengar */
+            color: white !important;
+        }
+
+        /* Butang Mikrofon Mesra Telefon */
+        .mic-btn {
+            -webkit-tap-highlight-color: transparent;
+            transition: all 0.2s;
+        }
+        .mic-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-2 sm:p-4">
+
+    <!-- Skrin Mula -->
+    <div id="start-screen" class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center z-50 absolute">
+        <h1 class="text-3xl font-bold text-blue-600 mb-4">Gema Pahlawan di Bandar</h1>
+        <p class="text-gray-600 mb-6">Bantu kereta merah melepasi halangan di bandar dengan menyebut sajak pahlawan yang betul!</p>
+        <button id="start-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full w-full text-xl shadow-lg transition-transform active:scale-95">
+            Mula Bermain
+        </button>
+        <p id="mic-error" class="text-red-500 mt-4 hidden text-sm font-medium"></p>
+    </div>
+
+    <!-- Kontena Permainan Utama -->
+    <div id="game-ui" class="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden hidden flex-col h-[90vh] max-h-[800px]">
+        
+        <!-- Header: Markah & Tahap -->
+        <div class="bg-blue-800 text-white p-4 flex justify-between items-center shadow-md z-20">
+            <div class="flex flex-col">
+                <span class="text-xs uppercase tracking-wider text-blue-200">Markah</span>
+                <span id="score-display" class="text-2xl font-bold">0</span>
+            </div>
+            <div class="text-center">
+                <h2 class="text-xl font-bold">Bandar Kartun</h2>
+            </div>
+            <div class="flex flex-col text-right">
+                <span class="text-xs uppercase tracking-wider text-blue-200">Tahap</span>
+                <span id="level-display" class="text-2xl font-bold">1 / 20</span>
+            </div>
+        </div>
+
+        <!-- Dunia Permainan (Visual) -->
+        <div class="game-world flex-grow w-full relative">
+            <!-- Langit, Matahari & Awan -->
+            <div class="sun"></div>
+            
+            <div class="cloud" style="top: 10%; left: 10%; width: 60px; height: 20px;">
+                <div style="position:absolute; top:-10px; left:10px; width:30px; height:30px; background:white; border-radius:50%;"></div>
+                <div style="position:absolute; top:-5px; left:30px; width:25px; height:25px; background:white; border-radius:50%;"></div>
+            </div>
+            <div class="cloud" style="top: 25%; left: 70%; width: 80px; height: 25px;">
+                <div style="position:absolute; top:-15px; left:15px; width:40px; height:40px; background:white; border-radius:50%;"></div>
+                <div style="position:absolute; top:-5px; left:45px; width:30px; height:30px; background:white; border-radius:50%;"></div>
+            </div>
+
+            <!-- Bangunan Bandar -->
+            <div class="building bg-indigo-400" style="left: 5%; width: 70px; height: 160px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                <div class="window"></div><div class="window"></div>
+                <div class="window"></div><div class="window"></div>
+                <div class="window" style="background:#1F2937;"></div><div class="window"></div>
+                <div class="window"></div><div class="window"></div>
+            </div>
+            
+            <div class="building bg-purple-500" style="left: 25%; width: 90px; height: 220px;">
+                <div class="window"></div><div class="window"></div><div class="window"></div>
+                <div class="window"></div><div class="window" style="background:#1F2937;"></div><div class="window"></div>
+                <div class="window"></div><div class="window"></div><div class="window"></div>
+                <div class="window"></div><div class="window"></div><div class="window"></div>
+            </div>
+
+            <div class="building bg-pink-400" style="left: 55%; width: 60px; height: 130px; border-radius: 4px 4px 0 0;">
+                <div class="window"></div><div class="window"></div>
+                <div class="window" style="background:#1F2937;"></div><div class="window"></div>
+                <div class="window"></div><div class="window"></div>
+            </div>
+
+            <div class="building bg-blue-400" style="left: 75%; width: 80px; height: 180px; border-top-left-radius: 50px; border-top-right-radius: 50px;">
+                <div class="window" style="margin-top:20px;"></div><div class="window" style="margin-top:20px;"></div>
+                <div class="window"></div><div class="window"></div>
+                <div class="window"></div><div class="window" style="background:#1F2937;"></div>
+                <div class="window"></div><div class="window"></div>
+            </div>
+
+            <!-- Jalan Raya -->
+            <div class="road-line"></div>
+            
+            <!-- Kereta Animasi (SVG) -->
+            <div id="carriage" class="carriage-container pos-start stopped">
+                <div class="carriage">
+                    <svg viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Asap Ekzos -->
+                        <circle cx="5" cy="50" r="3" fill="#D1D5DB" opacity="0.8"/>
+                        <circle cx="0" cy="45" r="4" fill="#E5E7EB" opacity="0.6"/>
+                        <!-- Badan Kereta Belakang -->
+                        <rect x="15" y="30" width="80" height="18" rx="5" fill="#EF4444" stroke="#B91C1C" stroke-width="2"/>
+                        <!-- Bumbung Kereta -->
+                        <path d="M 25 30 L 35 15 L 70 15 L 85 30 Z" fill="#EF4444" stroke="#B91C1C" stroke-width="2"/>
+                        <path d="M 25 30 L 35 15 L 70 15 L 85 30 Z" fill="#EF4444"/> <!-- Hide inner stroke -->
+                        <!-- Tingkap -->
+                        <path d="M 36 17 L 53 17 L 53 28 L 28 28 Z" fill="#87CEEB" stroke="#1F2937" stroke-width="1.5"/>
+                        <path d="M 56 17 L 68 17 L 80 28 L 56 28 Z" fill="#87CEEB" stroke="#1F2937" stroke-width="1.5"/>
+                        <!-- Lampu Kereta Depan & Belakang -->
+                        <rect x="90" y="35" width="5" height="8" rx="2" fill="#FDE047"/>
+                        <rect x="15" y="32" width="4" height="8" rx="1" fill="#DC2626"/>
+                        <!-- Roda Belakang -->
+                        <g class="wheel" style="transform-origin: 30px 48px;">
+                            <circle cx="30" cy="48" r="12" fill="#1F2937"/>
+                            <circle cx="30" cy="48" r="5" fill="#E5E7EB"/>
+                            <line x1="25" y1="48" x2="35" y2="48" stroke="#9CA3AF" stroke-width="2"/>
+                            <line x1="30" y1="43" x2="30" y2="53" stroke="#9CA3AF" stroke-width="2"/>
+                        </g>
+                        <!-- Roda Depan -->
+                        <g class="wheel" style="transform-origin: 75px 48px;">
+                            <circle cx="75" cy="48" r="12" fill="#1F2937"/>
+                            <circle cx="75" cy="48" r="5" fill="#E5E7EB"/>
+                            <line x1="70" y1="48" x2="80" y2="48" stroke="#9CA3AF" stroke-width="2"/>
+                            <line x1="75" y1="43" x2="75" y2="53" stroke="#9CA3AF" stroke-width="2"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Halangan Kon Lalu Lintas (SVG) -->
+            <div id="obstacle" class="obstacle">
+                <svg viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 25 10 L 15 45 L 35 45 Z" fill="#F97316"/>
+                    <path d="M 25 10 L 25 45 L 35 45 Z" fill="#EA580C"/> <!-- Shading -->
+                    <!-- Garisan Putih Pantul Cahaya -->
+                    <path d="M 21 22 L 29 22 L 31 28 L 19 28 Z" fill="white"/>
+                    <path d="M 18 34 L 32 34 L 33 39 L 17 39 Z" fill="white"/>
+                    <!-- Tapak Hitam -->
+                    <rect x="8" y="43" width="34" height="6" rx="2" fill="#1F2937"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Panel Kawalan & Ayat -->
+        <div class="bg-white p-4 sm:p-6 rounded-t-3xl shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] z-20 flex-shrink-0">
+            
+            <!-- Ayat Sasaran -->
+            <div class="mb-6 flex items-center bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                <div class="mr-3 bg-blue-200 p-2 rounded-full text-blue-800">
+                    <!-- Ikon Lokasi Bandar (Map Pin) -->
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                </div>
+                <h3 id="target-sentence" class="text-xl sm:text-2xl font-bold text-gray-800 leading-tight">
+                    Memuatkan ayat...
+                </h3>
+            </div>
+
+            <!-- Status -->
+            <div id="status-text" class="text-center font-semibold text-gray-500 mb-4 h-6 transition-colors">
+                Tekan butang mikrofon dan sebut ayat di atas.
+            </div>
+
+            <!-- Butang Tindakan -->
+            <div class="flex flex-col items-center gap-4">
+                <!-- Butang Mikrofon (Besar) -->
+                <button id="mic-btn" class="mic-btn bg-blue-500 hover:bg-blue-600 text-white rounded-full p-6 w-24 h-24 flex items-center justify-center shadow-lg mx-auto">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                    </svg>
+                </button>
+
+                <!-- Butang Tahap Seterusnya (Tersembunyi pada mulanya) -->
+                <button id="next-btn" class="hidden w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-xl text-lg shadow-md transition-all active:scale-95">
+                    Tahap Seterusnya ➔
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skrin Tamat -->
+    <div id="end-screen" class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center z-50 absolute hidden">
+        <h1 class="text-4xl font-bold text-green-600 mb-4">Tahniah!</h1>
+        <p class="text-xl text-gray-700 mb-2">Anda telah menamatkan semua tahap.</p>
+        <p class="text-gray-500 mb-6">Markah Akhir Anda:</p>
+        <div id="final-score" class="text-6xl font-bold text-blue-500 mb-8">0</div>
+        <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full w-full text-lg shadow-lg">
+            Main Semula
+        </button>
+    </div>
+
+    <script>
+        // --- DATA PERMAINAN ---
+        const sentences = [
+            "jika hilangmu tanpa pusara",
+            "jika pusaramu tanpa nama",
+            "jika namamu tanpa bunga",
+            "penjajah mengatakan engkau derhaka",
+            "maka engkaulah pahlawan yang sebenarnya",
+            "Gema seabad silam",
+            "Inggeris datang meredah Pahang",
+            "bersama peluru bersama senapang",
+            "membunuh menangkap setiap pejuang",
+            "Sungai Semantan berubah merah",
+            "bukan sarap hilir ke kuala",
+            "bukan rakit mudik ke hulu",
+            "arus merahnya menjulang mayat",
+            "pahlawan bangsa pahlawan rakyat",
+            "tujuh liang dadanya tersayat",
+            "Pahlawan",
+            "Untukmu derita untukmu penjara",
+            "bukan bintang tersemat di dada",
+            "semangatmu api negara berdaulat",
+            "namamu terukir di jantung rakyat"
+        ];
+
+        let currentLevel = 0;
+        let score = 0;
+        const totalLevels = sentences.length;
+
+        // --- ELEMEN DOM ---
+        const uiStart = document.getElementById('start-screen');
+        const uiGame = document.getElementById('game-ui');
+        const uiEnd = document.getElementById('end-screen');
+        
+        const btnStart = document.getElementById('start-btn');
+        const btnMic = document.getElementById('mic-btn');
+        const btnNext = document.getElementById('next-btn');
+        
+        const textTarget = document.getElementById('target-sentence');
+        const textStatus = document.getElementById('status-text');
+        const displayScore = document.getElementById('score-display');
+        const displayLevel = document.getElementById('level-display');
+        const displayFinalScore = document.getElementById('final-score');
+        const errMic = document.getElementById('mic-error');
+        
+        const carriage = document.getElementById('carriage');
+        const obstacle = document.getElementById('obstacle');
+
+        // --- SISTEM AUDIO (Web Audio API) ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(freq, type, duration, vol = 0.1) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playSuccessSound() {
+            playTone(523.25, 'sine', 0.1, 0.2); // C5
+            setTimeout(() => playTone(659.25, 'sine', 0.1, 0.2), 100); // E5
+            setTimeout(() => playTone(783.99, 'sine', 0.3, 0.2), 200); // G5
+        }
+
+        function playCrashSound() {
+            playTone(150, 'sawtooth', 0.3, 0.3);
+            setTimeout(() => playTone(100, 'sawtooth', 0.4, 0.3), 150);
+        }
+
+        // --- ALGORITMA TOLERANSI SEBUTAN (Levenshtein Distance) ---
+        function cleanString(str) {
+            return str.toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
+        }
+
+        function calculateSimilarity(s1, s2) {
+            let longer = cleanString(s1);
+            let shorter = cleanString(s2);
+            if (longer.length < shorter.length) {
+                [longer, shorter] = [shorter, longer];
+            }
+            let longerLength = longer.length;
+            if (longerLength === 0) return 100;
+            
+            let costs = new Array();
+            for (let i = 0; i <= longer.length; i++) {
+                let lastValue = i;
+                for (let j = 0; j <= shorter.length; j++) {
+                    if (i == 0) costs[j] = j;
+                    else {
+                        if (j > 0) {
+                            let newValue = costs[j - 1];
+                            if (longer.charAt(i - 1) != shorter.charAt(j - 1))
+                                newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                            costs[j - 1] = lastValue;
+                            lastValue = newValue;
+                        }
+                    }
+                }
+                if (i > 0) costs[shorter.length] = lastValue;
+            }
+            let distance = costs[shorter.length];
+            return ((longerLength - distance) / parseFloat(longerLength)) * 100;
+        }
+
+        // --- PENGECAMAN SUARA (Speech Recognition API) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+
+        if (!SpeechRecognition) {
+            errMic.textContent = "Pelayar ini tidak menyokong pengecaman suara. Sila gunakan Google Chrome.";
+            errMic.classList.remove('hidden');
+            btnStart.disabled = true;
+            btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            recognition = new SpeechRecognition();
+            recognition.lang = "ms-MY";
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = function() {
+                isListening = true;
+                btnMic.classList.add('listening');
+                textStatus.textContent = "Sedang mendengar...";
+                textStatus.className = "text-center font-semibold text-red-500 mb-4 h-6";
+            };
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                checkAnswer(transcript);
+            };
+
+            recognition.onerror = function(event) {
+                console.error(event.error);
+                isListening = false;
+                btnMic.classList.remove('listening');
+                
+                if(event.error === 'no-speech') {
+                    textStatus.textContent = "Tiada suara dikesan. Sila cuba lagi.";
+                } else {
+                    textStatus.textContent = "Ralat mikrofon: " + event.error;
+                }
+                textStatus.className = "text-center font-semibold text-red-500 mb-4 h-6";
+            };
+
+            recognition.onend = function() {
+                isListening = false;
+                btnMic.classList.remove('listening');
+                if(!btnNext.classList.contains('hidden')) {
+                    textStatus.textContent = "Kerja yang bagus!";
+                } else if(textStatus.textContent === "Sedang mendengar...") {
+                    textStatus.textContent = "Sila tekan mikrofon dan cuba lagi.";
+                    textStatus.className = "text-center font-semibold text-gray-500 mb-4 h-6";
+                }
+            };
+        }
+
+        // --- LOGIK PERMAINAN ---
+        
+        async function requestMicrophoneAccess() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                return true;
+            } catch (err) {
+                errMic.textContent = "Sila benarkan akses mikrofon untuk bermain permainan ini.";
+                errMic.classList.remove('hidden');
+                return false;
+            }
+        }
+
+        btnStart.addEventListener('click', async () => {
+            initAudio(); // Initialize audio context on user gesture
+            const micGranted = await requestMicrophoneAccess();
+            if (micGranted) {
+                uiStart.classList.add('hidden');
+                uiGame.classList.remove('hidden');
+                uiGame.classList.add('flex');
+                loadLevel();
+            }
+        });
+
+        btnMic.addEventListener('click', () => {
+            if (isListening || !recognition) return;
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error("Recognition already started", e);
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            currentLevel++;
+            if (currentLevel < totalLevels) {
+                loadLevel();
+            } else {
+                endGame();
+            }
+        });
+
+        function loadLevel() {
+            // Reset UI
+            btnNext.classList.add('hidden');
+            btnMic.classList.remove('hidden');
+            btnMic.disabled = false;
+            
+            textStatus.textContent = "Tekan butang mikrofon dan sebut ayat di atas.";
+            textStatus.className = "text-center font-semibold text-gray-500 mb-4 h-6";
+            
+            displayLevel.textContent = `${currentLevel + 1} / ${totalLevels}`;
+            textTarget.textContent = sentences[currentLevel];
+
+            // Reset Animasi
+            carriage.className = "carriage-container pos-start stopped";
+            obstacle.style.opacity = "1";
+            
+            // Gerakkan kereta ke halangan selepas sikit masa
+            setTimeout(() => {
+                carriage.className = "carriage-container pos-middle";
+            }, 100);
+        }
+
+        function checkAnswer(spokenText) {
+            const targetText = sentences[currentLevel];
+            const similarity = calculateSimilarity(targetText, spokenText);
+            
+            console.log(`Sebutan: "${spokenText}" | Sasaran: "${targetText}" | Peratusan: ${similarity.toFixed(2)}%`);
+
+            // Toleransi sebutan: Sekitar 75% ke atas dikira betul
+            if (similarity >= 75) {
+                successSequence();
+            } else {
+                failSequence(spokenText);
+            }
+        }
+
+        function successSequence() {
+            playSuccessSound();
+            
+            score += 10;
+            displayScore.textContent = score;
+            
+            textStatus.textContent = "Tahniah! Sebutan Tepat.";
+            textStatus.className = "text-center font-semibold text-green-500 mb-4 h-6";
+            
+            btnMic.classList.add('hidden');
+            btnNext.classList.remove('hidden');
+
+            // Animasi melepasi halangan
+            obstacle.style.opacity = "0"; // Halangan hilang
+            carriage.className = "carriage-container pos-end"; // Kereta bergerak ke kanan
+        }
+
+        function failSequence(spokenText) {
+            playCrashSound();
+            
+            textStatus.textContent = `Hampir tepat. Sila cuba lagi.`;
+            textStatus.className = "text-center font-semibold text-red-500 mb-4 h-6";
+            
+            // Animasi pelanggaran (shake)
+            carriage.classList.remove('pos-middle');
+            void carriage.offsetWidth; // trigger reflow
+            carriage.classList.add('pos-middle', 'crash-anim', 'stopped');
+            
+            setTimeout(() => {
+                carriage.classList.remove('crash-anim');
+            }, 400);
+        }
+
+        function endGame() {
+            uiGame.classList.add('hidden');
+            uiGame.classList.remove('flex');
+            uiEnd.classList.remove('hidden');
+            displayFinalScore.textContent = score;
+            playSuccessSound();
+            setTimeout(playSuccessSound, 300);
+        }
+
+    </script>
+</body>
+</html>
